@@ -5,7 +5,7 @@ MAX_TOPICS_PER_MESSAGE = 10
 
 # User-facing strings. Adjust here to change defaults or provide translations.
 DEFAULT_WELCOME_MESSAGE = "Add a welcome message."
-CONTRIBUTORS_HEADER = "## Topics added by:"
+CONTRIBUTORS_HEADER = "## Теми додали:"
 CONTRIBUTORS_EMPTY_STATE = "(empty at first)"
 DEFAULT_CONTRIBUTORS_MESSAGE = f"{CONTRIBUTORS_HEADER}\n{CONTRIBUTORS_EMPTY_STATE}"
 TOPICS_INITIALIZING_MESSAGE = "Setting up topics board..."
@@ -46,15 +46,15 @@ TOPIC_REMOVED = "Topic removed."
 NOTIFICATION_TEMPLATE = "🔔 {user} додав нову тему — {emoji} **{text}**!"
 REMOVE_BOARDS_SUCCESS = "Topic board removed. Run /init again to start fresh."
 TOPICS_HELP_MESSAGE = (
-    "Here are all available commands:\n"
-    "• **/addtopic** — add a new topic\n"
-    "• **/removetopic** — remove one of your topics (with autocomplete)\n"
-    "• **/editwelcomemessage** — edit the welcome message (opens modal)\n"
-    "• **/removeboards** — admin-only, deletes all topic boards and resets everything\n"
-    "• **/topicshelp** — shows this help"
+    "Доступні команди:\n"
+    "• **/addtopic** — додати тему (емодзі та текст)\n"
+    "• **/removetopic** — видалити одну зі своїх тем (з автозаповненням)\n"
+    "• **/editwelcomemessage** — редагувати привітальне повідомлення (відкриває модальне вікно)\n"
+    "• **/removeboards** — лише для адміністраторів, видаляє всі дошки тем і скидає все\n"
+    "• **/topicshelp** — справка по командам"
 )
 
-TOPIC_ENTRY_TEMPLATE = "- {emoji} — **{text}**"
+TOPIC_ENTRY_TEMPLATE = "> - {emoji} — **{text}**"
 TOPICS_EMPTY_MESSAGE = "No topics yet. Add one with /addtopic."
 
 MISSING_TOKEN_MESSAGE = "DISCORD_TOKEN environment variable is not set."
