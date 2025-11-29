@@ -5,7 +5,7 @@ MAX_TOPICS_PER_MESSAGE = 10
 
 # User-facing strings. Adjust here to change defaults or provide translations.
 DEFAULT_WELCOME_MESSAGE = "Add a welcome message."
-CONTRIBUTORS_HEADER = "Теми додали:"
+CONTRIBUTORS_HEADER = "## Topic added by:"
 CONTRIBUTORS_EMPTY_STATE = "(empty at first)"
 DEFAULT_CONTRIBUTORS_MESSAGE = f"{CONTRIBUTORS_HEADER}\n{CONTRIBUTORS_EMPTY_STATE}"
 TOPICS_INITIALIZING_MESSAGE = "Setting up topics board..."
@@ -47,11 +47,11 @@ NOTIFICATION_TEMPLATE = "🔔 {user} додав нову тему — {emoji} **
 REMOVE_BOARDS_SUCCESS = "Topic board removed. Run /init again to start fresh."
 TOPICS_HELP_MESSAGE = (
     "Here are all available commands:\n"
-    "• /addtopic — add a new topic\n"
-    "• /removetopic — remove one of your topics (with autocomplete)\n"
-    "• /editwelcomemessage — edit the welcome message (opens modal)\n"
-    "• /removeboards — admin-only, deletes all topic boards and resets everything\n"
-    "• /topicshelp — shows this help"
+    "• **/addtopic** — add a new topic\n"
+    "• **/removetopic** — remove one of your topics (with autocomplete)\n"
+    "• **/editwelcomemessage** — edit the welcome message (opens modal)\n"
+    "• **/removeboards** — admin-only, deletes all topic boards and resets everything\n"
+    "• **/topicshelp** — shows this help"
 )
 
 TOPIC_ENTRY_TEMPLATE = "- {emoji} — **{text}**"
