@@ -14,7 +14,7 @@ print(f"Allowed guilds: {ALLOWED_GUILDS}")
 GUILD_NOT_ALLOWED = "This bot is not available in this guild."
 
 # Maximum number of topics that may be rendered in a single message.
-MAX_TOPICS_PER_MESSAGE = 11
+MAX_TOPICS_PER_MESSAGE = 10
 
 # User-facing strings. Adjust here to change defaults or provide translations.
 DEFAULT_WELCOME_MESSAGE = "Add a welcome message."
@@ -53,14 +53,14 @@ REMOVE_BOARDS_COMMAND_DESCRIPTION = "Remove all topic board messages and data fo
 TOPICS_HELP_COMMAND_DESCRIPTION = "Show a quick guide to all topic commands."
 
 EMOJI_ALREADY_USED = "This emoji is already in use in this guild. Choose another one."
-SINGLE_EMOJI_REQUIRED = "Please enter exactly one emoji."
+SINGLE_EMOJI_REQUIRED = "В параметрі емодзі повинен бути лише один емодзі."
 TOPIC_ADDED = "Topic added!"
 TOPIC_NOT_FOUND = "Topic not found."
 TOPIC_REMOVAL_NOT_ALLOWED = "You can only remove topics you created."
 TOPIC_EDIT_NOT_ALLOWED = "You can only edit topics you created."
 TOPIC_REMOVED = "Topic removed."
 NOTIFICATION_TEMPLATE = "🔔 {user} додав нову тему — {emoji} **{text}**!"
-TOPIC_EDIT_NOTIFICATION_TEMPLATE = "✏️ {user} змінив текст теми — {emoji} **{text}**."
+TOPIC_EDIT_NOTIFICATION_TEMPLATE = "🔔 {user} змінив текст теми — {emoji} **{text}**."
 REMOVE_BOARDS_SUCCESS = "Topic board removed. Run /init again to start fresh."
 TOPICS_HELP_MESSAGE = (
     "Доступні команди:\n"
