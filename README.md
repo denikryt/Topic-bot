@@ -1,6 +1,6 @@
-# **TopicBoard Bot**
+# **Topic-Bot**
 
-TopicBoard is a lightweight Discord bot that turns a dedicated channel into a clean, structured topic board.
+Topic-Bot is a lightweight Discord bot that turns a dedicated channel into a clean, structured topic board.
 Users can add topics, react to the ones they care about, and instantly see activity updates — all while the bot keeps the channel tidy and organized.
 
 ---
