@@ -10,16 +10,44 @@ from discord.ext import commands
 
 from . import commands as topic_commands
 from . import config
+from .services import topics as topic_service
 
 
 class TopicBot(commands.Bot):
     def __init__(self) -> None:
         intents = discord.Intents.default()
+        intents.message_content = True
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
         await topic_commands.setup(self)
         await self.tree.sync()
+
+    async def on_message(self, message: discord.Message) -> None:
+        # Always allow the bot and other bots to ignore this hook.
+        if message.author.bot:
+            return
+
+        channel = message.channel
+        guild = message.guild
+        if guild is None or not isinstance(channel, discord.TextChannel):
+            return
+
+        state = topic_service.load_state(guild.id)
+        entry = state.entry
+        if entry is None:
+            return
+
+        if str(channel.id) != str(entry.channel_id):
+            return
+
+        # Process any prefix commands before removing the message.
+        await self.process_commands(message)
+
+        try:
+            await message.delete()
+        except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+            return
 
 
 def main() -> None:
