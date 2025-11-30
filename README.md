@@ -151,7 +151,7 @@ To run the bot locally:
    ALLOWED_GUILDS=123456789012345678,987654321012345678
    ```
 
-   * `AllowedGuilds` must contain **comma-separated guild IDs** where the bot is allowed to operate.
+   * `ALLOWED_GUILDS` must contain **comma-separated guild IDs** where the bot is allowed to operate.
 
 2. (Optional, recommended) Create a virtual environment and install dependencies:
 
