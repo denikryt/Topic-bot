@@ -52,7 +52,7 @@ class TopicBot(commands.Bot):
 
 def main() -> None:
     load_dotenv()  # load .env into process env
-    token = os.getenv("TEST_BOT_TOKEN")
+    token = os.getenv("DISCORD_TOKEN")
     if not token:
         print(config.MISSING_TOKEN_MESSAGE)
         sys.exit(1)
