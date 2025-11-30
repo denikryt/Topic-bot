@@ -137,3 +137,26 @@ You can easily:
 * `/editwelcomemessage` — edit the welcome message
 * `/topicshelp` — show help
 * `/removeboards` — full reset
+
+---
+
+## **⚙️ Setup**
+
+To run the bot locally:
+
+1. **Create a `.env` file** with two required fields:
+
+   ```
+   DiscordToken=YOUR_BOT_TOKEN
+   AllowedGuilds=123456789012345678,987654321012345678
+   ```
+
+   * `AllowedGuilds` must contain **comma-separated guild IDs** where the bot is allowed to operate.
+
+2. (Optional, recommended) Create a virtual environment and install dependencies:
+
+   ```
+   pip install -r requirements.txt
+   ```
+
+That's it — run the bot and it will work only in the guilds you’ve listed.
