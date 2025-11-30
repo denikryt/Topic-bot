@@ -60,6 +60,18 @@ Features:
 
 ---
 
+## **✏️ Editing Topic Text**
+
+```
+/edittopictext topic:<autocomplete> text:<string>
+```
+
+* Autocomplete shows your topics (admins see all).
+* Updates only the text — emoji stays the same and remains unique.
+* Re-renders the board and refreshes the notification message.
+
+---
+
 ## **👋 Welcome Message (Modal Editing)**
 
 The welcome message can be edited through a Discord modal:
@@ -134,6 +146,7 @@ You can easily:
 * `/init` — set up the board
 * `/addtopic` — add a new topic
 * `/removetopic` — remove a topic
+* `/edittopictext` — edit the text of an existing topic
 * `/editwelcomemessage` — edit the welcome message
 * `/topicshelp` — show help
 * `/removeboards` — full reset

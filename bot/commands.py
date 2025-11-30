@@ -817,6 +817,105 @@ class Topics(commands.Cog):
             choices.append(app_commands.Choice(name=display[:100], value=topic.id))
         return choices
 
+    @app_commands.command(
+        name="edittopictext",
+        description=config.EDIT_TOPIC_TEXT_COMMAND_DESCRIPTION,
+    )
+    @app_commands.describe(
+        topic="Select a topic to edit",
+        text="New text for the topic",
+    )
+    @app_commands.autocomplete(topic=topic_autocomplete)
+    async def edittopictext(self, interaction: discord.Interaction, topic: str, text: str) -> None:
+        entry = await self._require_registered(interaction)
+        if entry is None:
+            return
+
+        guild = interaction.guild
+        if guild is None:
+            await interaction.response.send_message(
+                config.SERVER_ONLY_COMMAND, ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        channel: Optional[discord.TextChannel] = None
+        target_message_id: Optional[str] = None
+        updated_emoji: Optional[str] = None
+
+        async with topic_service.locked_state(guild.id) as state:
+            entry = state.entry
+            if entry is None:
+                await interaction.followup.send(
+                    config.SERVER_NOT_INITIALIZED, ephemeral=True
+                )
+                return
+
+            selected = next((t for t in state.topics if t.id == topic), None)
+            if selected is None:
+                await interaction.followup.send(config.TOPIC_NOT_FOUND, ephemeral=True)
+                return
+
+            caller_can_manage = interaction.user.guild_permissions.manage_guild if guild else False
+            if not caller_can_manage and selected.author_id != str(interaction.user.id):
+                await interaction.followup.send(
+                    config.TOPIC_EDIT_NOT_ALLOWED, ephemeral=True
+                )
+                return
+
+            channel_id = int(entry.channel_id or 0)
+            channel = await _resolve_text_channel(self.bot, guild, channel_id)
+            if channel is None:
+                await interaction.followup.send(
+                    config.CONFIGURED_CHANNEL_INACCESSIBLE, ephemeral=True
+                )
+                return
+
+            updated_emoji = selected.emoji
+            selected.text = text
+            state.topics_dirty = True
+            target_message_id = selected.message_id
+
+            await _delete_notification_message(channel, entry.notification_message_id)
+            if entry.notification_message_id:
+                entry.notification_message_id = ""
+                state.registry_dirty = True
+
+        if target_message_id is None or channel is None or updated_emoji is None:
+            try:
+                await interaction.delete_original_response()
+            except discord.HTTPException:
+                pass
+            return
+
+        await render_topics_message(self.bot, guild.id, target_message_id)
+
+        notification_content = config.TOPIC_EDIT_NOTIFICATION_TEMPLATE.format(
+            user=f"<@{interaction.user.id}>",
+            emoji=updated_emoji,
+            text=text,
+        )
+        notification_message = await _send_notification_message(channel, notification_content)
+        if notification_message:
+            notification_id = str(notification_message.id)
+            async with topic_service.locked_state(guild.id) as state:
+                entry = state.entry
+                if entry is None:
+                    pass
+                else:
+                    existing_id = entry.notification_message_id
+                    if existing_id and existing_id != notification_id:
+                        await _delete_notification_message(channel, notification_id)
+                    else:
+                        entry.notification_message_id = notification_id
+                        state.registry_dirty = True
+
+        try:
+            await interaction.delete_original_response()
+        except discord.HTTPException:
+            pass
+
     @app_commands.command(name="removetopic", description=config.REMOVE_TOPIC_COMMAND_DESCRIPTION)
     @app_commands.autocomplete(topic=topic_autocomplete)
     async def removetopic(self, interaction: discord.Interaction, topic: str) -> None:
