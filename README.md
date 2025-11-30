@@ -147,8 +147,8 @@ To run the bot locally:
 1. **Create a `.env` file** with two required fields:
 
    ```
-   DiscordToken=YOUR_BOT_TOKEN
-   AllowedGuilds=123456789012345678,987654321012345678
+   DISCORD_TOKEN=YOUR_BOT_TOKEN
+   ALLOWED_GUILDS=123456789012345678,987654321012345678
    ```
 
    * `AllowedGuilds` must contain **comma-separated guild IDs** where the bot is allowed to operate.
