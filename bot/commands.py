@@ -818,7 +818,7 @@ class Topics(commands.Cog):
         return choices
 
     @app_commands.command(
-        name="edittopictext",
+        name="edittopic",
         description=config.EDIT_TOPIC_TEXT_COMMAND_DESCRIPTION,
     )
     @app_commands.describe(
@@ -826,7 +826,7 @@ class Topics(commands.Cog):
         text="New text for the topic",
     )
     @app_commands.autocomplete(topic=topic_autocomplete)
-    async def edittopictext(self, interaction: discord.Interaction, topic: str, text: str) -> None:
+    async def edittopic(self, interaction: discord.Interaction, topic: str, text: str) -> None:
         entry = await self._require_registered(interaction)
         if entry is None:
             return

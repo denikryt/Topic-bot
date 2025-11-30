@@ -63,7 +63,7 @@ Features:
 ## **✏️ Editing Topic Text**
 
 ```
-/edittopictext topic:<autocomplete> text:<string>
+/edittopic topic:<autocomplete> text:<string>
 ```
 
 * Autocomplete shows your topics (admins see all).
@@ -146,7 +146,7 @@ You can easily:
 * `/init` — set up the board
 * `/addtopic` — add a new topic
 * `/removetopic` — remove a topic
-* `/edittopictext` — edit the text of an existing topic
+* `/edittopic` — edit the text of an existing topic
 * `/editwelcomemessage` — edit the welcome message
 * `/topicshelp` — show help
 * `/removeboards` — full reset
