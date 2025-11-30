@@ -62,7 +62,8 @@ class GuildEntry:
 
     channel_id: str
     welcome_message_id: str = ""
-    userlist_message_id: str = ""
+    board_header_message_id: str = ""
+    contributors_message_id: str = ""
     notification_message_id: str = ""
     messages: List[MessageEntry] = field(default_factory=list)
     registry_dirty: bool = False
@@ -74,7 +75,12 @@ class GuildEntry:
 
         channel_id = str(raw.get("channel_id") or "")
         welcome_id = str(raw.get("welcome_message_id") or "")
-        userlist_id = str(raw.get("userlist_message_id") or "")
+        header_id = str(raw.get("board_header_message_id") or "")
+        contributors_id = str(
+            raw.get("contributors_message_id")
+            or raw.get("userlist_message_id")
+            or ""
+        )
         notification_message_id = str(raw.get("notification_message_id") or "")
 
         messages_raw = raw.get("messages")
@@ -95,18 +101,23 @@ class GuildEntry:
         entry = cls(
             channel_id=channel_id,
             welcome_message_id=welcome_id,
-            userlist_message_id=userlist_id,
+            board_header_message_id=header_id,
+            contributors_message_id=contributors_id,
             notification_message_id=notification_message_id,
             messages=messages,
             registry_dirty=registry_dirty,
         )
+
+        if raw.get("userlist_message_id") and not raw.get("contributors_message_id"):
+            entry.registry_dirty = True
         return entry
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "channel_id": self.channel_id,
             "welcome_message_id": self.welcome_message_id,
-            "userlist_message_id": self.userlist_message_id,
+            "board_header_message_id": self.board_header_message_id,
+            "contributors_message_id": self.contributors_message_id,
             "notification_message_id": self.notification_message_id,
             "messages": [message.to_dict() for message in self.messages],
         }

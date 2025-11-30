@@ -173,15 +173,17 @@ def has_emoji(state: GuildTopicState, emoji: str) -> bool:
 def create_entry(
     channel_id: int,
     welcome_message_id: int,
-    userlist_message_id: int,
-    topics_message_id: int,
+    board_header_message_id: int | str,
+    contributors_message_id: int | str,
+    topics_message_id: int | str,
     notification_message_id: int | str = "",
 ) -> GuildEntry:
     """Construct a new registry entry for /init."""
     entry = GuildEntry(
         channel_id=str(channel_id),
         welcome_message_id=str(welcome_message_id),
-        userlist_message_id=str(userlist_message_id),
+        board_header_message_id=str(board_header_message_id),
+        contributors_message_id=str(contributors_message_id),
         notification_message_id=str(notification_message_id or ""),
         messages=[MessageEntry(message_id=str(topics_message_id), count=0)],
     )

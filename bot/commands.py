@@ -16,6 +16,19 @@ from .services import topics as topic_service
 logger = logging.getLogger(__name__)
 
 
+async def _respond_guild_not_allowed(interaction: discord.Interaction) -> None:
+    """Send an ephemeral response indicating the guild is not allowed."""
+    if interaction.response.is_done():
+        await interaction.followup.send(config.GUILD_NOT_ALLOWED, ephemeral=True)
+    else:
+        await interaction.response.send_message(config.GUILD_NOT_ALLOWED, ephemeral=True)
+
+
+def _is_allowed_guild(interaction: discord.Interaction) -> bool:
+    """Return True if the interaction originates from an allowed guild."""
+    return config.is_allowed_guild(interaction.guild_id)
+
+
 async def _resolve_text_channel(
     bot: commands.Bot, guild: Optional[discord.Guild], channel_id: int
 ) -> Optional[discord.TextChannel]:
@@ -91,11 +104,40 @@ def _collect_contributor_ids(topics: List[Topic]) -> List[str]:
     return sorted(contributors)
 
 
+def _build_contributors_content(topics: List[Topic]) -> str:
+    """Return rendered contributors message content without pinging."""
+    contributor_ids = _collect_contributor_ids(topics)
+    lines = [config.CONTRIBUTORS_HEADER]
+    if contributor_ids:
+        lines.append(" ".join(f"<@{user_id}>" for user_id in contributor_ids))
+    else:
+        lines.append(config.CONTRIBUTORS_EMPTY_STATE)
+    return "\n".join(lines)
+
+
+async def _create_contributors_message(
+    channel: Optional[discord.TextChannel], topics: List[Topic]
+) -> Optional[discord.Message]:
+    """Create a fresh contributors message with silent mentions."""
+    if channel is None:
+        return None
+
+    content = _build_contributors_content(topics)
+    try:
+        return await channel.send(content, allowed_mentions=discord.AllowedMentions.none())
+    except (discord.Forbidden, discord.HTTPException, discord.NotFound):
+        logger.warning("Failed to create contributors message in channel %s", channel.id if channel else "unknown")
+        return None
+
+
 async def _render_contributors_message(
     bot: commands.Bot, guild_id: int, entry: Optional[GuildEntry], topics: List[Topic]
 ) -> None:
     """Render the dedicated contributors message for *guild_id*."""
-    if not entry or not entry.userlist_message_id:
+    if not config.is_allowed_guild(guild_id):
+        return
+
+    if not entry or not entry.contributors_message_id:
         return
 
     guild = bot.get_guild(guild_id)
@@ -104,20 +146,13 @@ async def _render_contributors_message(
     if channel is None:
         return
 
-    message = await _fetch_message(channel, int(entry.userlist_message_id))
+    message = await _fetch_message(channel, int(entry.contributors_message_id))
     if message is None:
         return
 
-    contributor_ids = _collect_contributor_ids(topics)
-    lines = [config.CONTRIBUTORS_HEADER]
-    if contributor_ids:
-        lines.append(" ".join(f"<@{user_id}>" for user_id in contributor_ids))
-    else:
-        lines.append(config.CONTRIBUTORS_EMPTY_STATE)
-
-    content = "\n".join(lines)
+    content = _build_contributors_content(topics)
     try:
-        await message.edit(content=content)
+        await message.edit(content=content, allowed_mentions=discord.AllowedMentions.none())
     except discord.HTTPException:
         logger.warning("Failed to render contributors message for guild %s", guild_id)
         return
@@ -153,6 +188,9 @@ async def render_topics_message(
     bot: commands.Bot, guild_id: int, target_message_id: Optional[str] = None
 ) -> None:
     """Render one or all managed topics messages for *guild_id* and sync reactions."""
+    if not config.is_allowed_guild(guild_id):
+        return
+
     async with topic_service.locked_state(guild_id) as state:
         entry = state.entry
         if not entry:
@@ -247,6 +285,9 @@ class WelcomeMessageModal(discord.ui.Modal):
         self.add_item(self.message_input)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
+        if not _is_allowed_guild(interaction):
+            return
+
         guild = interaction.guild
         if guild is None or guild.id != self.guild_id:
             await interaction.response.send_message(
@@ -300,6 +341,9 @@ class WelcomeMessageEditView(discord.ui.View):
     async def edit_welcome(
         self, interaction: discord.Interaction, button: discord.ui.Button
     ) -> None:
+        if not _is_allowed_guild(interaction):
+            return
+
         guild = interaction.guild
         if guild is None or guild.id != self.guild_id:
             await interaction.response.send_message(
@@ -345,6 +389,10 @@ class Topics(commands.Cog):
 
     async def _require_registered(self, interaction: discord.Interaction) -> Optional[GuildEntry]:
         """Ensure the guild is registered; inform the user if not."""
+        if not _is_allowed_guild(interaction):
+            await _respond_guild_not_allowed(interaction)
+            return None
+
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -366,6 +414,10 @@ class Topics(commands.Cog):
     @app_commands.command(name="init", description=config.INIT_COMMAND_DESCRIPTION)
     @app_commands.checks.has_permissions(manage_guild=True)
     async def init(self, interaction: discord.Interaction) -> None:
+        if not _is_allowed_guild(interaction):
+            await _respond_guild_not_allowed(interaction)
+            return
+
         guild = interaction.guild
         if guild is None:
             await interaction.response.send_message(
@@ -395,12 +447,14 @@ class Topics(commands.Cog):
 
         welcome_text = config.DEFAULT_WELCOME_MESSAGE
         welcome_message_obj = await channel.send(welcome_text)
-        contributors_message = await channel.send(config.DEFAULT_CONTRIBUTORS_MESSAGE)
+        header_message = await channel.send(config.TOPIC_BOARD_HEADER)
         topics_message = await channel.send(config.TOPICS_INITIALIZING_MESSAGE)
+        contributors_message = await _create_contributors_message(channel, [])
         new_entry = topic_service.create_entry(
             channel_id=channel.id,
             welcome_message_id=welcome_message_obj.id,
-            userlist_message_id=contributors_message.id,
+            board_header_message_id=header_message.id,
+            contributors_message_id=contributors_message.id if contributors_message else "",
             topics_message_id=topics_message.id,
         )
 
@@ -425,6 +479,10 @@ class Topics(commands.Cog):
 
     @init.error
     async def init_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
+        if not _is_allowed_guild(interaction):
+            await _respond_guild_not_allowed(interaction)
+            return
+
         if isinstance(error, app_commands.MissingPermissions):
             if interaction.response.is_done():
                 await interaction.followup.send(
@@ -490,6 +548,10 @@ class Topics(commands.Cog):
     async def edit_welcome_message_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
+        if not _is_allowed_guild(interaction):
+            await _respond_guild_not_allowed(interaction)
+            return
+
         if isinstance(error, app_commands.MissingPermissions):
             if interaction.response.is_done():
                 await interaction.followup.send(
@@ -539,6 +601,8 @@ class Topics(commands.Cog):
 
         target_message_id: Optional[str] = None
         channel: Optional[discord.TextChannel] = None
+        topics_snapshot: List[Topic] = []
+        new_board_message_created = False
 
         async with topic_service.locked_state(guild.id) as state:
             entry = state.entry
@@ -570,8 +634,13 @@ class Topics(commands.Cog):
 
             target_message = topic_service.find_first_available_message(entry)
             if target_message is None:
+                await _delete_message_safely(channel, entry.contributors_message_id)
+                if entry.contributors_message_id:
+                    entry.contributors_message_id = ""
+                    state.registry_dirty = True
                 new_message = await channel.send(config.TOPICS_INITIALIZING_MESSAGE)
                 target_message = topic_service.register_message(entry, str(new_message.id))
+                new_board_message_created = True
 
             new_topic = topic_service.add_topic_to_state(
                 state=state,
@@ -582,8 +651,18 @@ class Topics(commands.Cog):
                 message_id=target_message.message_id,
             )
             target_message_id = new_topic.message_id
+            topics_snapshot = list(state.topics)
 
         await render_topics_message(self.bot, guild.id, target_message_id)
+
+        if new_board_message_created and channel is not None:
+            contributors_message = await _create_contributors_message(channel, topics_snapshot)
+            if contributors_message:
+                async with topic_service.locked_state(guild.id) as state:
+                    entry = state.entry
+                    if entry:
+                        entry.contributors_message_id = str(contributors_message.id)
+                        state.registry_dirty = True
 
         notification_message = await _send_notification_message(channel, notification_content)
         if notification_message:
@@ -655,16 +734,12 @@ class Topics(commands.Cog):
                 )
                 return
 
-            welcome_id = entry.welcome_message_id
-            userlist_id = entry.userlist_message_id
-            notification_id = entry.notification_message_id
-            topic_message_ids = [message.message_id for message in entry.messages]
-
-            await _delete_message_safely(channel, welcome_id)
-            await _delete_message_safely(channel, userlist_id)
-            for message_id in topic_message_ids:
+            await _delete_message_safely(channel, entry.welcome_message_id)
+            await _delete_message_safely(channel, entry.board_header_message_id)
+            await _delete_message_safely(channel, entry.contributors_message_id)
+            for message_id in (message.message_id for message in entry.messages):
                 await _delete_message_safely(channel, message_id)
-            await _delete_notification_message(channel, notification_id)
+            await _delete_notification_message(channel, entry.notification_message_id)
 
             storage.delete_topics_file(guild.id)
             state.entry = None
@@ -678,6 +753,10 @@ class Topics(commands.Cog):
     async def removeboards_error(
         self, interaction: discord.Interaction, error: app_commands.AppCommandError
     ) -> None:
+        if not _is_allowed_guild(interaction):
+            await _respond_guild_not_allowed(interaction)
+            return
+
         if isinstance(error, app_commands.MissingPermissions):
             if interaction.response.is_done():
                 await interaction.followup.send(
@@ -695,6 +774,10 @@ class Topics(commands.Cog):
         description=config.TOPICS_HELP_COMMAND_DESCRIPTION,
     )
     async def topicshelp(self, interaction: discord.Interaction) -> None:
+        if not _is_allowed_guild(interaction):
+            await _respond_guild_not_allowed(interaction)
+            return
+
         await interaction.response.send_message(
             config.TOPICS_HELP_MESSAGE,
             ephemeral=True,
@@ -703,6 +786,9 @@ class Topics(commands.Cog):
     async def topic_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> List[app_commands.Choice[str]]:
+        if not _is_allowed_guild(interaction):
+            return []
+
         guild = interaction.guild
         if guild is None:
             return []

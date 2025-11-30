@@ -33,6 +33,9 @@ class TopicBot(commands.Bot):
         if guild is None or not isinstance(channel, discord.TextChannel):
             return
 
+        if not config.is_allowed_guild(guild.id):
+            return
+
         state = topic_service.load_state(guild.id)
         entry = state.entry
         if entry is None:

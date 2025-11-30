@@ -1,10 +1,24 @@
 """Bot configuration constants."""
+from __future__ import annotations
+import os
+from dotenv import load_dotenv
+
+# Ensure environment variables from .env are available before reading values.
+load_dotenv()
+def _load_allowed_guilds() -> list[str]:
+    raw = os.getenv("ALLOWED_GUILDS", "")
+    return [guild_id.strip() for guild_id in raw.split(",") if guild_id.strip()]
+
+ALLOWED_GUILDS = _load_allowed_guilds()
+print(f"Allowed guilds: {ALLOWED_GUILDS}")
+GUILD_NOT_ALLOWED = "This bot is not available in this guild."
 
 # Maximum number of topics that may be rendered in a single message.
-MAX_TOPICS_PER_MESSAGE = 10
+MAX_TOPICS_PER_MESSAGE = 11
 
 # User-facing strings. Adjust here to change defaults or provide translations.
 DEFAULT_WELCOME_MESSAGE = "Add a welcome message."
+TOPIC_BOARD_HEADER = "## Дошка тем"
 CONTRIBUTORS_HEADER = "## Теми додали:"
 CONTRIBUTORS_EMPTY_STATE = "(empty at first)"
 DEFAULT_CONTRIBUTORS_MESSAGE = f"{CONTRIBUTORS_HEADER}\n{CONTRIBUTORS_EMPTY_STATE}"
@@ -58,3 +72,10 @@ TOPIC_ENTRY_TEMPLATE = "> - {emoji} — **{text}**"
 TOPICS_EMPTY_MESSAGE = "No topics yet. Add one with /addtopic."
 
 MISSING_TOKEN_MESSAGE = "DISCORD_TOKEN environment variable is not set."
+
+
+def is_allowed_guild(guild_id: int | str | None) -> bool:
+    """Return True if *guild_id* is allowed to use the bot."""
+    if guild_id is None:
+        return False
+    return str(guild_id) in ALLOWED_GUILDS
