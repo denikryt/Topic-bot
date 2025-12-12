@@ -9,7 +9,7 @@ import discord
 from discord.ext import commands
 
 from . import commands as topic_commands
-from . import config
+from . import config, storage
 from .services import topics as topic_service
 
 
@@ -20,6 +20,7 @@ class TopicBot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self) -> None:
+        await storage.ensure_indexes()
         await topic_commands.setup(self)
         await self.tree.sync()
 
@@ -36,12 +37,11 @@ class TopicBot(commands.Bot):
         if not config.is_allowed_guild(guild.id):
             return
 
-        state = topic_service.load_state(guild.id)
+        state = await topic_service.load_state(guild.id, channel.id)
         entry = state.entry
+        if state.registry_dirty or state.topics_dirty:
+            await topic_service.save_state(state)
         if entry is None:
-            return
-
-        if str(channel.id) != str(entry.channel_id):
             return
 
         # Process any prefix commands before removing the message.
@@ -61,7 +61,12 @@ def main() -> None:
         sys.exit(1)
 
     bot = TopicBot()
-    bot.run(token)
+    try:
+        bot.run(token)
+    except RuntimeError as exc:
+        # Provide a clear message (e.g., Mongo not reachable) before exiting.
+        print(str(exc))
+        sys.exit(1)
 
 
 if __name__ == "__main__":

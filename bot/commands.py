@@ -9,7 +9,7 @@ import emoji as emoji_lib
 from discord import app_commands
 from discord.ext import commands
 
-from . import config, rendering, storage
+from . import config, rendering
 from .models import GuildEntry, Topic
 from .services import topics as topic_service
 
@@ -185,13 +185,13 @@ async def _remove_reaction_fully(message: discord.Message, emoji: str) -> None:
 
 
 async def render_topics_message(
-    bot: commands.Bot, guild_id: int, target_message_id: Optional[str] = None
+    bot: commands.Bot, guild_id: int, channel_id: int, target_message_id: Optional[str] = None
 ) -> None:
-    """Render one or all managed topics messages for *guild_id* and sync reactions."""
+    """Render one or all managed topics messages for *guild_id*/*channel_id* and sync reactions."""
     if not config.is_allowed_guild(guild_id):
         return
 
-    async with topic_service.locked_state(guild_id) as state:
+    async with topic_service.locked_state(guild_id, channel_id) as state:
         entry = state.entry
         if not entry:
             return
@@ -201,7 +201,6 @@ async def render_topics_message(
             messages_to_render = [
                 message for message in entry.messages if str(message.message_id) == str(target_message_id)
             ]
-        channel_id = int(entry.channel_id or 0)
 
     guild = bot.get_guild(guild_id)
     channel = await _resolve_text_channel(bot, guild, channel_id)
@@ -388,7 +387,7 @@ class Topics(commands.Cog):
         self.bot = bot
 
     async def _require_registered(self, interaction: discord.Interaction) -> Optional[GuildEntry]:
-        """Ensure the guild is registered; inform the user if not."""
+        """Ensure the channel is registered; inform the user if not."""
         if not _is_allowed_guild(interaction):
             await _respond_guild_not_allowed(interaction)
             return None
@@ -400,13 +399,25 @@ class Topics(commands.Cog):
             )
             return None
 
-        state = topic_service.load_state(guild.id)
+        channel = interaction.channel
+        if channel is None or not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                config.TEXT_CHANNEL_ONLY_COMMAND, ephemeral=True
+            )
+            return None
+
+        state = await topic_service.load_state(guild.id, channel.id)
         entry = state.entry
         if state.registry_dirty or state.topics_dirty:
-            topic_service.save_state(state)
+            await topic_service.save_state(state)
         if not entry:
             await interaction.response.send_message(
                 config.SERVER_NOT_INITIALIZED, ephemeral=True
+            )
+            return None
+        if entry.channel_id and str(entry.channel_id) != str(channel.id):
+            await interaction.response.send_message(
+                config.REMOVE_BOARDS_CHANNEL_ONLY, ephemeral=True
             )
             return None
         return entry
@@ -426,24 +437,21 @@ class Topics(commands.Cog):
             return
 
         channel = interaction.channel
-        state = topic_service.load_state(guild.id)
+        if channel is None or not isinstance(channel, discord.TextChannel):
+            await interaction.response.send_message(
+                config.TEXT_CHANNEL_ONLY_COMMAND, ephemeral=True
+            )
+            return
+
+        state = await topic_service.load_state(guild.id, channel.id)
         entry = state.entry
-        if (
-            entry
-            and channel is not None
-            and isinstance(channel, discord.TextChannel)
-            and str(channel.id) == str(entry.channel_id)
-        ):
+        if entry:
             await interaction.response.send_message(
                 config.INIT_ALREADY_EXISTS, ephemeral=True
             )
             return
 
         await interaction.response.defer(ephemeral=True)
-
-        if channel is None or not isinstance(channel, discord.TextChannel):
-            await interaction.followup.send(config.TEXT_CHANNEL_ONLY_COMMAND, ephemeral=True)
-            return
 
         welcome_text = config.DEFAULT_WELCOME_MESSAGE
         welcome_message_obj = await channel.send(welcome_text)
@@ -458,13 +466,13 @@ class Topics(commands.Cog):
             topics_message_id=topics_message.id,
         )
 
-        async with topic_service.locked_state(guild.id) as state:
+        async with topic_service.locked_state(guild.id, channel.id) as state:
             state.entry = new_entry
             state.registry_dirty = True
             state.topics = []
             state.topics_dirty = True
 
-        await render_topics_message(self.bot, guild.id)
+        await render_topics_message(self.bot, guild.id, channel.id)
         view = WelcomeMessageEditView(
             self.bot,
             guild.id,
@@ -600,11 +608,11 @@ class Topics(commands.Cog):
         await interaction.response.defer(ephemeral=True)
 
         target_message_id: Optional[str] = None
-        channel: Optional[discord.TextChannel] = None
+        channel: Optional[discord.TextChannel] = interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
         topics_snapshot: List[Topic] = []
         new_board_message_created = False
 
-        async with topic_service.locked_state(guild.id) as state:
+        async with topic_service.locked_state(guild.id, channel.id if channel else 0) as state:
             entry = state.entry
             if entry is None:
                 await interaction.followup.send(
@@ -620,7 +628,7 @@ class Topics(commands.Cog):
                 return
 
             channel_id = int(entry.channel_id or 0)
-            channel = await _resolve_text_channel(self.bot, guild, channel_id)
+            channel = channel or await _resolve_text_channel(self.bot, guild, channel_id)
             if channel is None:
                 await interaction.followup.send(
                     config.CONFIGURED_CHANNEL_INACCESSIBLE, ephemeral=True
@@ -653,12 +661,13 @@ class Topics(commands.Cog):
             target_message_id = new_topic.message_id
             topics_snapshot = list(state.topics)
 
-        await render_topics_message(self.bot, guild.id, target_message_id)
+        if channel is not None:
+            await render_topics_message(self.bot, guild.id, channel.id, target_message_id)
 
         if new_board_message_created and channel is not None:
             contributors_message = await _create_contributors_message(channel, topics_snapshot)
             if contributors_message:
-                async with topic_service.locked_state(guild.id) as state:
+                async with topic_service.locked_state(guild.id, channel.id) as state:
                     entry = state.entry
                     if entry:
                         entry.contributors_message_id = str(contributors_message.id)
@@ -667,7 +676,7 @@ class Topics(commands.Cog):
         notification_message = await _send_notification_message(channel, notification_content)
         if notification_message:
             notification_id = str(notification_message.id)
-            async with topic_service.locked_state(guild.id) as state:
+            async with topic_service.locked_state(guild.id, channel.id if channel else 0) as state:
                 entry = state.entry
                 if entry is None:
                     pass
@@ -712,7 +721,7 @@ class Topics(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        async with topic_service.locked_state(guild.id) as state:
+        async with topic_service.locked_state(guild.id, channel.id) as state:
             entry = state.entry
             if entry is None:
                 await interaction.followup.send(
@@ -741,11 +750,10 @@ class Topics(commands.Cog):
                 await _delete_message_safely(channel, message_id)
             await _delete_notification_message(channel, entry.notification_message_id)
 
-            storage.delete_topics_file(guild.id)
             state.entry = None
             state.registry_dirty = True
             state.topics = []
-            state.topics_dirty = False
+            state.topics_dirty = True
 
         await interaction.followup.send(config.REMOVE_BOARDS_SUCCESS, ephemeral=True)
 
@@ -793,13 +801,19 @@ class Topics(commands.Cog):
         if guild is None:
             return []
 
-        state = topic_service.load_state(guild.id)
+        channel = interaction.channel
+        if channel is None or not isinstance(channel, discord.TextChannel):
+            return []
+
+        state = await topic_service.load_state(guild.id, channel.id)
+        if state.registry_dirty or state.topics_dirty:
+            await topic_service.save_state(state)
         if state.entry is None:
             return []
 
         topics: List[Topic] = state.topics
         if state.registry_dirty or state.topics_dirty:
-            topic_service.save_state(state)
+            await topic_service.save_state(state)
 
         caller_can_manage = interaction.user.guild_permissions.manage_guild if guild else False
         if not caller_can_manage:
@@ -840,11 +854,11 @@ class Topics(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
-        channel: Optional[discord.TextChannel] = None
+        channel: Optional[discord.TextChannel] = interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
         target_message_id: Optional[str] = None
         updated_emoji: Optional[str] = None
 
-        async with topic_service.locked_state(guild.id) as state:
+        async with topic_service.locked_state(guild.id, channel.id if channel else 0) as state:
             entry = state.entry
             if entry is None:
                 await interaction.followup.send(
@@ -865,7 +879,7 @@ class Topics(commands.Cog):
                 return
 
             channel_id = int(entry.channel_id or 0)
-            channel = await _resolve_text_channel(self.bot, guild, channel_id)
+            channel = channel or await _resolve_text_channel(self.bot, guild, channel_id)
             if channel is None:
                 await interaction.followup.send(
                     config.CONFIGURED_CHANNEL_INACCESSIBLE, ephemeral=True
@@ -889,7 +903,7 @@ class Topics(commands.Cog):
                 pass
             return
 
-        await render_topics_message(self.bot, guild.id, target_message_id)
+        await render_topics_message(self.bot, guild.id, channel.id, target_message_id)
 
         notification_content = config.TOPIC_EDIT_NOTIFICATION_TEMPLATE.format(
             user=f"<@{interaction.user.id}>",
@@ -899,7 +913,7 @@ class Topics(commands.Cog):
         notification_message = await _send_notification_message(channel, notification_content)
         if notification_message:
             notification_id = str(notification_message.id)
-            async with topic_service.locked_state(guild.id) as state:
+            async with topic_service.locked_state(guild.id, channel.id) as state:
                 entry = state.entry
                 if entry is None:
                     pass
@@ -932,10 +946,11 @@ class Topics(commands.Cog):
 
         await interaction.response.defer(ephemeral=True)
 
+        channel: Optional[discord.TextChannel] = interaction.channel if isinstance(interaction.channel, discord.TextChannel) else None
         target_message_id: Optional[str] = None
         target_emoji: Optional[str] = None
 
-        async with topic_service.locked_state(guild.id) as state:
+        async with topic_service.locked_state(guild.id, channel.id if channel else 0) as state:
             entry = state.entry
             if entry is None:
                 await interaction.followup.send(
@@ -962,13 +977,14 @@ class Topics(commands.Cog):
 
         if target_message_id and target_emoji:
             channel_id = int(entry.channel_id or 0)
-            channel = await _resolve_text_channel(self.bot, guild, channel_id)
+            channel = channel or await _resolve_text_channel(self.bot, guild, channel_id)
             if channel is not None:
                 message = await _fetch_message(channel, int(target_message_id))
                 if message is not None:
                     await _remove_reaction_fully(message, target_emoji)
 
-        await render_topics_message(self.bot, guild.id, target_message_id)
+        if channel is not None:
+            await render_topics_message(self.bot, guild.id, channel.id, target_message_id)
         try:
             await interaction.delete_original_response()
         except discord.HTTPException:

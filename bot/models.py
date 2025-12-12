@@ -37,21 +37,21 @@ class Topic:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Topic":
         return cls(
-            id=str(data.get("id") or ""),
+            id=str(data.get("topic_id") or data.get("id") or ""),
             emoji=str(data.get("emoji") or ""),
             text=str(data.get("text") or ""),
-            author_id=str(data.get("authorId") or ""),
-            author_name=str(data.get("authorName") or ""),
+            author_id=str(data.get("authorId") or data.get("author_id") or ""),
+            author_name=str(data.get("authorName") or data.get("author_name") or ""),
             message_id=str(data.get("message_id") or ""),
         )
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "id": self.id,
+            "topic_id": self.id,
             "emoji": self.emoji,
             "text": self.text,
-            "authorId": self.author_id,
-            "authorName": self.author_name,
+            "author_id": self.author_id,
+            "author_name": self.author_name,
             "message_id": self.message_id,
         }
 
@@ -69,11 +69,12 @@ class GuildEntry:
     registry_dirty: bool = False
 
     @classmethod
-    def from_raw(cls, raw: Optional[Dict[str, Any]]) -> Optional["GuildEntry"]:
+    def from_raw(cls, raw: Optional[Dict[str, Any]], channel_id: Optional[str] = None) -> Optional["GuildEntry"]:
         if raw is None:
             return None
 
-        channel_id = str(raw.get("channel_id") or "")
+        raw_channel_id = str(raw.get("channel_id") or "")
+        channel_id = str(raw_channel_id or channel_id or "")
         welcome_id = str(raw.get("welcome_message_id") or "")
         header_id = str(raw.get("board_header_message_id") or "")
         contributors_id = str(
@@ -110,6 +111,8 @@ class GuildEntry:
 
         if raw.get("userlist_message_id") and not raw.get("contributors_message_id"):
             entry.registry_dirty = True
+        if not raw_channel_id and channel_id:
+            entry.registry_dirty = True
         return entry
 
     def to_dict(self) -> Dict[str, Any]:
@@ -136,6 +139,7 @@ class GuildTopicState:
     """In-memory state for a guild registry entry and its topics."""
 
     guild_id: int
+    channel_id: int
     entry: Optional[GuildEntry]
     topics: List[Topic]
     registry_dirty: bool = False

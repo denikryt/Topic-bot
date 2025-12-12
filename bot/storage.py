@@ -1,78 +1,90 @@
-"""Storage helpers for the topics bot.
-
-This module centralizes safe JSON reading and writing for the guild registry
-and per-guild topic lists. All operations are asynchronous-friendly but use
-standard file IO since the dataset is small.
-"""
+"""Storage helpers for the topics bot using MongoDB."""
 from __future__ import annotations
 
-import json
-from pathlib import Path
-from typing import Any, Dict, List
+import logging
+import os
+from typing import Any, Dict, List, Optional
 
-BASE_DIR = Path(__file__).resolve().parent
-TOPICS_DIR = BASE_DIR / "topics"
-GUILDS_FILE = BASE_DIR / "guilds.json"
+import motor.motor_asyncio
+from pymongo import errors as pymongo_errors
+
+# Mongo client and database
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+client = motor.motor_asyncio.AsyncIOMotorClient(
+    MONGO_URI,
+    serverSelectionTimeoutMS=5000,
+)
+db = client.topicboard
+
+guild_boards = db.guild_boards
+topics_collection = db.topics
+
+logger = logging.getLogger(__name__)
 
 
-def _atomic_write(path: Path, data: Any) -> None:
-    """Write JSON data atomically to the given path.
-
-    Uses a temporary file in the same directory then replaces the destination to
-    reduce risk of corruption if the process exits mid-write.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
-    with tmp_path.open("w", encoding="utf-8") as handle:
-        json.dump(data, handle, ensure_ascii=False, indent=2)
-    tmp_path.replace(path)
-
-
-def _safe_read(path: Path, default: Any) -> Any:
-    """Safely read JSON content, returning *default* if missing or invalid."""
+async def ensure_indexes() -> None:
+    """Create required indexes if they do not already exist."""
     try:
-        with path.open("r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except FileNotFoundError:
-        return default
-    except json.JSONDecodeError:
-        return default
+        await guild_boards.create_index(
+            [("guild_id", 1), ("channel_id", 1)], unique=True, name="guild_channel_unique"
+        )
+        await topics_collection.create_index(
+            [("guild_id", 1), ("channel_id", 1)], name="topics_guild_channel"
+        )
+        await topics_collection.create_index(
+            [("topic_id", 1)], unique=True, name="topic_id_unique"
+        )
+    except (pymongo_errors.ServerSelectionTimeoutError, pymongo_errors.ConnectionFailure) as exc:
+        message = (
+            "Unable to connect to MongoDB at "
+            f"{MONGO_URI!r}. Ensure MongoDB is running and accessible."
+        )
+        logger.error(message)
+        raise RuntimeError(message) from exc
 
 
-def load_guild_registry() -> Dict[str, Dict[str, str]]:
-    """Return the guilds registry, falling back to an empty mapping."""
-    return _safe_read(GUILDS_FILE, default={})
+async def fetch_board(guild_id: int | str, channel_id: int | str) -> Optional[Dict[str, Any]]:
+    """Return a board document for the guild/channel if present."""
+    return await guild_boards.find_one(
+        {"guild_id": str(guild_id), "channel_id": str(channel_id)}
+    )
 
 
-def save_guild_registry(registry: Dict[str, Dict[str, str]]) -> None:
-    """Persist the guilds registry to disk."""
-    _atomic_write(GUILDS_FILE, registry)
+async def upsert_board(entry: Dict[str, Any]) -> None:
+    """Insert or replace a board document."""
+    await guild_boards.replace_one(
+        {"guild_id": str(entry["guild_id"]), "channel_id": str(entry["channel_id"])},
+        entry,
+        upsert=True,
+    )
 
 
-def ensure_topics_file(guild_id: int) -> Path:
-    """Ensure a topics file exists for *guild_id* and return its path."""
-    path = TOPICS_DIR / f"{guild_id}.json"
-    if not path.exists():
-        _atomic_write(path, [])
-    return path
+async def delete_board(guild_id: int | str, channel_id: int | str) -> None:
+    """Delete a board document for the guild/channel."""
+    await guild_boards.delete_one({"guild_id": str(guild_id), "channel_id": str(channel_id)})
 
 
-def load_topics(guild_id: int) -> List[Dict[str, Any]]:
-    """Load the topics list for *guild_id*, creating the file if missing."""
-    path = ensure_topics_file(guild_id)
-    return _safe_read(path, default=[])
+async def load_topics(guild_id: int | str, channel_id: int | str) -> List[Dict[str, Any]]:
+    """Return all topics for the guild/channel."""
+    cursor = topics_collection.find(
+        {"guild_id": str(guild_id), "channel_id": str(channel_id)}
+    )
+    return [doc async for doc in cursor]
 
 
-def save_topics(guild_id: int, topics: List[Dict[str, Any]]) -> None:
-    """Persist the topics list for *guild_id*."""
-    path = ensure_topics_file(guild_id)
-    _atomic_write(path, topics)
+async def save_topics(guild_id: int | str, channel_id: int | str, topics: List[Dict[str, Any]]) -> None:
+    """Replace all topics for the guild/channel with the provided list."""
+    await topics_collection.delete_many({"guild_id": str(guild_id), "channel_id": str(channel_id)})
+    if topics:
+        docs = []
+        for topic in topics:
+            topic_copy = dict(topic)
+            topic_copy["guild_id"] = str(guild_id)
+            topic_copy["channel_id"] = str(channel_id)
+            docs.append(topic_copy)
+        await topics_collection.insert_many(docs)
 
 
-def delete_topics_file(guild_id: int) -> None:
-    """Delete the topics file for *guild_id* if it exists."""
-    path = TOPICS_DIR / f"{guild_id}.json"
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        return
+async def delete_topics_for_channel(guild_id: int | str, channel_id: int | str) -> None:
+    """Delete all topics for the given guild/channel."""
+    await topics_collection.delete_many({"guild_id": str(guild_id), "channel_id": str(channel_id)})

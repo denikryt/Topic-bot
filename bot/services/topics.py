@@ -25,49 +25,51 @@ def _get_lock(guild_id: int) -> asyncio.Lock:
 
 
 @asynccontextmanager
-async def locked_state(guild_id: int) -> AsyncIterator[GuildTopicState]:
-    """Yield a normalized state for *guild_id* and persist any changes."""
+async def locked_state(guild_id: int, channel_id: int) -> AsyncIterator[GuildTopicState]:
+    """Yield a normalized state for *guild_id*/*channel_id* and persist any changes."""
     lock = _get_lock(guild_id)
     async with lock:
-        state = load_state(guild_id)
+        state = await load_state(guild_id, channel_id)
         try:
             yield state
         finally:
-            save_state(state)
+            await save_state(state)
 
 
-def load_state(guild_id: int) -> GuildTopicState:
-    """Load registry entry and topics list, normalizing legacy data."""
-    registry = storage.load_guild_registry()
-    entry = GuildEntry.from_raw(registry.get(str(guild_id)))
-    topics = [Topic.from_dict(raw) for raw in storage.load_topics(guild_id)] if entry else []
+async def load_state(guild_id: int, channel_id: int) -> GuildTopicState:
+    """Load registry entry and topics list, normalizing data."""
+    raw_entry = await storage.fetch_board(guild_id, channel_id)
+    entry = GuildEntry.from_raw(raw_entry, channel_id=str(channel_id))
+    topics_raw = await storage.load_topics(guild_id, channel_id) if entry else []
+    topics = [Topic.from_dict(raw) for raw in topics_raw]
 
-    entry, topics, registry_changed, topics_changed = normalize_entry_and_topics(entry, topics)
+    entry, topics, entry_changed, topics_changed = normalize_entry_and_topics(entry, topics)
     state = GuildTopicState(
         guild_id=guild_id,
+        channel_id=channel_id,
         entry=entry,
         topics=topics,
-        registry_dirty=registry_changed,
+        registry_dirty=entry_changed,
         topics_dirty=topics_changed,
     )
     return state
 
 
-def save_state(state: GuildTopicState) -> None:
+async def save_state(state: GuildTopicState) -> None:
     """Persist registry and topics if marked dirty."""
     if state.registry_dirty:
-        registry = storage.load_guild_registry()
         if state.entry:
-            registry[str(state.guild_id)] = state.entry.to_dict()
+            payload = state.entry.to_dict()
+            payload["guild_id"] = str(state.guild_id)
+            await storage.upsert_board(payload)
         else:
-            registry.pop(str(state.guild_id), None)
-        storage.save_guild_registry(registry)
+            await storage.delete_board(state.guild_id, state.channel_id)
         state.registry_dirty = False
         if state.entry:
             state.entry.registry_dirty = False
 
     if state.topics_dirty:
-        storage.save_topics(state.guild_id, [topic.to_dict() for topic in state.topics])
+        await storage.save_topics(state.guild_id, state.channel_id, [topic.to_dict() for topic in state.topics])
         state.topics_dirty = False
 
 

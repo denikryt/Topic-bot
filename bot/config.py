@@ -37,7 +37,7 @@ WELCOME_MESSAGE_UPDATE_FAILED = "Failed to update the welcome message. Please tr
 WELCOME_MESSAGE_UPDATED = "Welcome message updated."
 
 SERVER_ONLY_COMMAND = "This command can only be used inside a server."
-SERVER_NOT_INITIALIZED = "This server is not initialized. Run /init first."
+SERVER_NOT_INITIALIZED = "This channel is not initialized. Run /init first."
 TEXT_CHANNEL_ONLY_COMMAND = "This command must be used in a text channel."
 MANAGE_SERVER_REQUIRED_INIT = "You need the Manage Server permission to run this command."
 MANAGE_SERVER_REQUIRED_REMOVE_BOARDS = "You need the Manage Server permission to remove the topics board."
@@ -46,13 +46,13 @@ REMOVE_BOARDS_CHANNEL_ONLY = "This command can only be used in the topic board c
 
 INIT_COMMAND_DESCRIPTION = "Initialize the topics board in this channel."
 EDIT_WELCOME_COMMAND_DESCRIPTION = "Edit the welcome message created during initialization."
-ADD_TOPIC_COMMAND_DESCRIPTION = "Add a topic for this guild."
+ADD_TOPIC_COMMAND_DESCRIPTION = "Add a topic for this channel."
 REMOVE_TOPIC_COMMAND_DESCRIPTION = "Remove one of your topics or any if you are an admin."
 EDIT_TOPIC_TEXT_COMMAND_DESCRIPTION = "Edit the text of an existing topic without changing its emoji."
-REMOVE_BOARDS_COMMAND_DESCRIPTION = "Remove all topic board messages and data for this guild."
+REMOVE_BOARDS_COMMAND_DESCRIPTION = "Remove all topic board messages and data for this channel."
 TOPICS_HELP_COMMAND_DESCRIPTION = "Show a quick guide to all topic commands."
 
-EMOJI_ALREADY_USED = "This emoji is already in use in this guild. Choose another one."
+EMOJI_ALREADY_USED = "This emoji is already in use in this channel. Choose another one."
 SINGLE_EMOJI_REQUIRED = "В параметрі емодзі повинен бути лише один емодзі."
 TOPIC_ADDED = "Topic added!"
 TOPIC_NOT_FOUND = "Topic not found."
@@ -68,7 +68,7 @@ TOPICS_HELP_MESSAGE = (
     "• **/removetopic** — видалити одну зі своїх тем (з автозаповненням)\n"
     "• **/edittopic** — відредагувати текст своєї теми (емодзі не змінюється)\n"
     "• **/editwelcomemessage** — редагувати привітальне повідомлення (для модераторів)\n"
-    "• **/removeboards** — видаляє всі дошки тем і скидає все (для модераторів)\n"
+    "• **/removeboards** — видаляє дошку тем у цьому каналі (для модераторів)\n"
     "• **/topicshelp** — справка по командам"
 )
 

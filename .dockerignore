@@ -1,0 +1,13 @@
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.db
+*.log
+bot/topics
+bot/guilds.json
+.git
+.gitignore
